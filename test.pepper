@@ -1,0 +1,41 @@
+(
+    before{
+        const x = 2
+    }
+)
+
+basic (
+    do{
+        GET http://example.com
+    }
+
+    headers{
+        content_type: application/json
+    }
+    
+    body{
+        asdads
+    }
+
+    before{
+        if response.Status != 200 {
+            panic("aaa")
+        }
+    }
+    
+    after{
+        if response.Status != 200 {
+            panic("aaa")
+        }
+    }
+
+    depends_on{
+        global
+    }
+)
+
+advanced (
+    depends_on{
+        basic, global
+    }
+)
