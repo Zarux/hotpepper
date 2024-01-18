@@ -6,4 +6,4 @@ tasks:
   run:
     desc: Run
     cmds:
-      - go run ./cmd/hotpepper
+      - go run -race ./cmd/hotpepper ${CLI_ARGS}

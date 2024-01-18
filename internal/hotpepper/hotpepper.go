@@ -1,11 +1,21 @@
 package hotpepper
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"sync"
+	"time"
 
+	"github.com/fatih/color"
+	"github.com/zarux/hotpepper/pkg/deptree"
 	"github.com/zarux/hotpepper/pkg/parse"
 	"github.com/zarux/hotpepper/pkg/runner"
+)
+
+var (
+	red = color.New(color.FgRed).SprintFunc()
 )
 
 func Run() {
@@ -19,9 +29,41 @@ func Run() {
 		panic(err)
 	}
 
-	for _, leaf := range leafs {
-		fmt.Printf("%+v\n", leaf)
+	httpClient := http.Client{
+		Timeout: 10 * time.Second,
 	}
 
-	runner.Run(*leafs[0])
+	globals := make(map[string]any)
+	globalMutex := sync.Mutex{}
+
+	ctx := context.Background()
+
+	order := []string{
+		"global",
+		"doStuff",
+		"doStuffLater",
+	}
+
+	for _, leaf := range order {
+		err = runner.Run(ctx, runner.Options{
+			HttpClient: &httpClient,
+			Globals:    globals,
+			Gmu:        &globalMutex,
+			Leaf:       leafs[leaf],
+			Silent:     leafs[leaf].Name == "global",
+		})
+		if err != nil {
+			fmt.Printf("%s with error: %s\n", red("FAILED"), err.Error())
+		}
+	}
+
+}
+
+func leavesToNodes(leafs []*parse.Leaf) []*deptree.Node {
+	var nodes []*deptree.Node
+	for _, leaf := range leafs {
+		node := deptree.NewNode(leaf.Name, nil)
+		nodes = append(nodes, node)
+	}
+	return nodes
 }

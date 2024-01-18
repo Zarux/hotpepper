@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func Parse(fileData []byte) ([]*Leaf, error) {
+func Parse(fileData []byte) (map[string]*Leaf, error) {
 	items, err := parseGlobal(fileData)
 	if err != nil {
 		return nil, err
@@ -20,9 +20,10 @@ func Parse(fileData []byte) ([]*Leaf, error) {
 	g.SetLimit(10)
 
 	var (
-		mu    sync.Mutex
-		leafs []*Leaf
+		mu sync.Mutex
 	)
+
+	leafs := make(map[string]*Leaf)
 
 	for name, item := range items {
 		name, item := name, item
@@ -32,7 +33,7 @@ func Parse(fileData []byte) ([]*Leaf, error) {
 				return err
 			}
 			mu.Lock()
-			leafs = append(leafs, l)
+			leafs[l.Name] = l
 			mu.Unlock()
 			return nil
 		})
@@ -43,6 +44,22 @@ func Parse(fileData []byte) ([]*Leaf, error) {
 	return leafs, nil
 }
 
+func Match(content []byte, opener, closer byte) int {
+	pos := 0
+	c := 1
+	for c > 0 {
+		char := content[pos]
+		switch char {
+		case opener:
+			c++
+		case closer:
+			c--
+		}
+		pos++
+	}
+	return pos
+}
+
 func parseGlobal(fileData []byte) (map[string][]byte, error) {
 	prevNl := -1
 	name := ""
@@ -51,12 +68,12 @@ func parseGlobal(fileData []byte) (map[string][]byte, error) {
 	for i := 0; i < len(fileData); i++ {
 		char := fileData[i]
 		switch char {
-		case charParanthesesOpen:
+		case CharParanthesesOpen:
 			name = strings.TrimSpace(string(fileData[prevNl+1 : i]))
 			if name == globalName {
 				return nil, fmt.Errorf("using reserved leaf name: %s", name)
 			}
-			closePos := match(fileData[i+1:], charParanthesesOpen, charParanthesesClosed)
+			closePos := Match(fileData[i+1:], CharParanthesesOpen, CharParanthesesClosed)
 			if name == "" {
 				name = globalName
 			}
@@ -83,6 +100,7 @@ const (
 	cellPreCode
 	cellPostCode
 	cellDeps
+	cellImport
 )
 
 type cellParser struct {
@@ -122,11 +140,16 @@ var cellParsers = []cellParser{
 		rgxIdent:  regexp.MustCompile(`(?m)depends_on?{`),
 		parseFunc: parseDeps,
 	},
+	{
+		t:         cellImport,
+		rgxIdent:  regexp.MustCompile(`(?m)import?{`),
+		parseFunc: parseImport,
+	},
 }
 
 func parseLeaf(name string, leafData []byte) (*Leaf, error) {
 	l := &Leaf{
-		name: name,
+		Name: name,
 	}
 
 	for _, parser := range cellParsers {
@@ -134,7 +157,7 @@ func parseLeaf(name string, leafData []byte) (*Leaf, error) {
 		if loc == nil {
 			continue
 		}
-		endPos := match(leafData[loc[1]+1:], charCurlyBraceOpen, charCurlyBraceClosed)
+		endPos := Match(leafData[loc[1]+1:], charCurlyBraceOpen, charCurlyBraceClosed)
 		result := leafData[loc[1] : loc[1]+endPos]
 		if parser.parseFunc == nil {
 			continue
@@ -146,29 +169,13 @@ func parseLeaf(name string, leafData []byte) (*Leaf, error) {
 	return l, nil
 }
 
-func match(content []byte, opener, closer byte) int {
-	pos := 0
-	c := 1
-	for c > 0 {
-		char := content[pos]
-		switch char {
-		case opener:
-			c++
-		case closer:
-			c--
-		}
-		pos++
-	}
-	return pos
-}
-
 func parseRequest(request []byte, l *Leaf) error {
 	requestLineParts := bytes.Split(bytes.TrimSpace(request), []byte(" "))
 	if len(requestLineParts) != 2 {
 		return errors.New("invalid request line format")
 	}
-	l.request.method = string(requestLineParts[0])
-	l.request.url = string(requestLineParts[1])
+	l.Request.Method = string(requestLineParts[0])
+	l.Request.URL = string(requestLineParts[1])
 	return nil
 }
 
@@ -183,22 +190,22 @@ func parseHeaders(headers []byte, l *Leaf) error {
 		}
 		headerMap[string(bytes.TrimSpace(headerLineParts[0]))] = string(bytes.TrimSpace(headerLineParts[1]))
 	}
-	l.request.headers = headerMap
+	l.Request.Headers = headerMap
 	return nil
 }
 
 func parseBody(body []byte, l *Leaf) error {
-	l.request.body = body
+	l.Request.Body = body
 	return nil
 }
 
 func parsePreCode(preCode []byte, l *Leaf) error {
-	l.preCode = bytes.TrimSpace(preCode)
+	l.PreCode = string(bytes.TrimSpace(preCode))
 	return nil
 }
 
 func parsePostCode(postCode []byte, l *Leaf) error {
-	l.postCode = bytes.TrimSpace(postCode)
+	l.PostCode = string(bytes.TrimSpace(postCode))
 	return nil
 }
 
@@ -209,6 +216,18 @@ func parseDeps(deps []byte, l *Leaf) error {
 	for _, depsPart := range depsParts {
 		dependsOn = append(dependsOn, string(bytes.TrimSpace(depsPart)))
 	}
-	l.dependsOn = dependsOn
+	l.DependsOn = dependsOn
+	return nil
+}
+
+func parseImport(imports []byte, l *Leaf) error {
+	var importItems []string
+	importLines := bytes.Split(imports, []byte("\n"))
+	for _, importLine := range importLines {
+		importItem := bytes.TrimSpace(importLine)
+		importItems = append(importItems, string(importItem))
+	}
+
+	l.Imports = importItems
 	return nil
 }

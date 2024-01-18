@@ -1,41 +1,55 @@
 (
     before{
-        const x = 2
+        globals["deviceToken"] = "aaa"
     }
 )
 
-basic (
-    do{
-        GET http://example.com
+doStuff (
+    before{
+        fmt.Println("starting")
+        locals["hello"] = "hello from precode"
+        locals["endpoint"] = "http/200"
     }
 
     headers{
-        content_type: application/json
+        Accept: application/json
+        Authorization: Bearer ${deviceToken}
     }
     
     body{
-        asdads
+
     }
 
-    before{
-        if response.Status != 200 {
-            panic("aaa")
-        }
+    do{
+        GET https://dummyjson.com/${endpoint}
     }
-    
+
+
     after{
-        if response.Status != 200 {
+        if response.StatusCode != 200 {
             panic("aaa")
         }
-    }
-
-    depends_on{
-        global
+        fmt.Println(locals["hello"])
+        gmu.Lock()
+        globals["hello"] = "world"
+        gmu.Unlock()
     }
 )
 
-advanced (
+doStuffLater (
+    import{
+        "errors"
+    }
+
+    after{
+        hello, ok := globals["hello"]
+        if !ok {
+            return errors.New("no greeting found")
+        }
+        fmt.Printf("hello %s\n", hello)
+    }
+
     depends_on{
-        basic, global
+        basic
     }
 )
