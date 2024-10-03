@@ -1,0 +1,10 @@
+do1(
+    before{
+        fmt.Println("starting 1")
+    }
+)
+do2(
+    before{
+        fmt.Println("starting 2")
+    }
+)

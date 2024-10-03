@@ -5,6 +5,8 @@
 )
 
 doStuff (
+    mandatory{}
+
     before{
         fmt.Println("starting")
         locals["hello"] = "hello from precode"
@@ -27,7 +29,7 @@ doStuff (
 
     after{
         if response.StatusCode != 200 {
-            panic("aaa")
+            return fmt.Errorf("aaaa")
         }
         fmt.Println(locals["hello"])
         gmu.Lock()
@@ -35,7 +37,6 @@ doStuff (
         gmu.Unlock()
     }
 )
-
 doStuffLater (
     import{
         "errors"

@@ -1,0 +1,9 @@
+doStuffEvenLater (
+   do{
+        GET https://dummyjson.com/http/500
+    }
+
+    depends_on{
+        doStuffLater
+    }
+)

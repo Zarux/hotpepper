@@ -17,7 +17,7 @@ func Parse(fileData []byte) (map[string]*Leaf, error) {
 		return nil, err
 	}
 	g := errgroup.Group{}
-	g.SetLimit(10)
+	g.SetLimit(1)
 
 	var (
 		mu sync.Mutex
@@ -46,6 +46,7 @@ func Parse(fileData []byte) (map[string]*Leaf, error) {
 
 func Match(content []byte, opener, closer byte) int {
 	pos := 0
+
 	c := 1
 	for c > 0 {
 		char := content[pos]
@@ -101,6 +102,7 @@ const (
 	cellPostCode
 	cellDeps
 	cellImport
+	cellMandatory
 )
 
 type cellParser struct {
@@ -145,6 +147,11 @@ var cellParsers = []cellParser{
 		rgxIdent:  regexp.MustCompile(`(?m)import?{`),
 		parseFunc: parseImport,
 	},
+	{
+		t:         cellMandatory,
+		rgxIdent:  regexp.MustCompile(`(?m)mandatory?{`),
+		parseFunc: parseMandatory,
+	},
 }
 
 func parseLeaf(name string, leafData []byte) (*Leaf, error) {
@@ -152,10 +159,18 @@ func parseLeaf(name string, leafData []byte) (*Leaf, error) {
 		Name: name,
 	}
 
+	fmt.Println("aaaaaa", name, string(leafData))
+
 	for _, parser := range cellParsers {
 		loc := parser.rgxIdent.FindIndex(leafData)
 		if loc == nil {
 			continue
+		}
+		if leafData[loc[1]] == charCurlyBraceClosed {
+			if err := parser.parseFunc(nil, l); err != nil {
+				return nil, err
+			}
+			return l, nil
 		}
 		endPos := Match(leafData[loc[1]+1:], charCurlyBraceOpen, charCurlyBraceClosed)
 		result := leafData[loc[1] : loc[1]+endPos]
@@ -229,5 +244,10 @@ func parseImport(imports []byte, l *Leaf) error {
 	}
 
 	l.Imports = importItems
+	return nil
+}
+
+func parseMandatory(_ []byte, l *Leaf) error {
+	l.Mandatory = true
 	return nil
 }

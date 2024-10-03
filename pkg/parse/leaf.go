@@ -16,6 +16,7 @@ type Leaf struct {
 	PostCode  string
 	DependsOn []string
 	Imports   []string
+	Mandatory bool
 }
 
 func (l *Leaf) ExpandTemplate(t *Template, strict bool) error {
